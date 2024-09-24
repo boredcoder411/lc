@@ -36,6 +36,47 @@ class App:
     def __eq__(self, other):
         return isinstance(other, App) and self.func == other.func and self.arg == other.arg
 
+# Context for storing named lambda expressions
+context = {}
+
+# Function to add a name to the context
+def add_to_context(name, expr):
+    context[name] = expr
+
+# Alpha-renaming to avoid variable capture
+def alpha_rename(expr, existing_vars):
+    """Rename bound variables to avoid conflicts with existing variables in the expression."""
+    if isinstance(expr, Var):
+        if expr.name in existing_vars:
+            return Var(expr.name + "_renamed")  # Avoid conflicts
+        else:
+            return expr
+    elif isinstance(expr, Lambda):
+        new_param_name = expr.param.name
+        if new_param_name in existing_vars:
+            new_param_name = new_param_name + "_renamed"
+        return Lambda(Var(new_param_name), alpha_rename(expr.body, existing_vars + [new_param_name]))
+    elif isinstance(expr, App):
+        return App(alpha_rename(expr.func, existing_vars), alpha_rename(expr.arg, existing_vars))
+
+# Custom substitution function for named expressions
+def substitute_named(expr, name, value):
+    """Substitutes a named expression into the lambda expression."""
+    if isinstance(expr, Var):
+        if expr.name == name:
+            # Replace the name with the value (with renamed bound variables to avoid conflicts)
+            return alpha_rename(value, [name])
+        else:
+            return expr
+    elif isinstance(expr, Lambda):
+        if expr.param.name == name:
+            return expr  # If the variable is bound in this abstraction, don't substitute
+        else:
+            return Lambda(expr.param, substitute_named(expr.body, name, value))
+    elif isinstance(expr, App):
+        return App(substitute_named(expr.func, name, value), substitute_named(expr.arg, name, value))
+    return expr
+
 # Substitution function for beta-reduction
 def substitute(expr, var, value):
     """Substitutes the variable `var` with the expression `value` in `expr`."""
@@ -48,7 +89,6 @@ def substitute(expr, var, value):
         if expr.param.name == var.name:
             return expr  # If variable is bound in this abstraction, don't substitute
         else:
-            # Perform substitution in the body
             return Lambda(expr.param, substitute(expr.body, var, value))
     elif isinstance(expr, App):
         # Perform substitution in both the function and argument
@@ -56,8 +96,13 @@ def substitute(expr, var, value):
     return expr
 
 # Beta-reduction: Apply function to argument (function application)
+# Updated beta-reduction logic to handle named expressions correctly
 def beta_reduce(expr):
-    """Performs a single beta-reduction step if possible."""
+    """Performs a single beta-reduction step, expanding named expressions."""
+    if isinstance(expr, Var) and expr.name in context:
+        # If it's a named expression, expand it
+        return context[expr.name]
+    
     if isinstance(expr, App):
         if isinstance(expr.func, Lambda):
             # Beta-reduction step: substitute the argument into the function body
@@ -73,7 +118,7 @@ def beta_reduce(expr):
     else:
         return expr  # For variables, return unchanged
 
-# Interpreter function without step counting
+# Interpreter function with full expansion of named expressions
 def interpret(expr):
     """Interprets (reduces) a lambda expression until it cannot be reduced further."""
     prev_expr = None
@@ -83,13 +128,11 @@ def interpret(expr):
     return expr
 
 # Parsing Functionality
-
 def tokenize(expression):
     """Tokenizes the input string into meaningful parts with position tracking."""
     tokens = []
     position = 0
 
-    # Add '.' to the tokenizing regex
     for match in re.finditer(r'λ|[().]|[^\s()λ.]+', expression):
         token = match.group(0)
         start_pos = match.start()
@@ -140,7 +183,7 @@ def parse_expression(expression):
     tokens = tokenize(expression)
     return parse(tokens)
 
-# REPL Function
+# REPL Function with support for named expressions
 def repl():
     """Run a simple REPL for Lambda Calculus expressions."""
     print("Welcome to the Lambda Calculus REPL! Type 'exit' to quit.")
@@ -149,10 +192,18 @@ def repl():
             expr_input = input("λ> ")
             if expr_input.lower() == 'exit':
                 break
-            parsed_expr = parse_expression(expr_input)
-            print("Parsed expression:", parsed_expr)
-            result = interpret(parsed_expr)
-            print("Reduced result:", result)
+            if '=' in expr_input:  # Handle named expression definitions
+                name, expr = expr_input.split('=')
+                name = name.strip()
+                expr = expr.strip()
+                parsed_expr = parse_expression(expr)
+                add_to_context(name, parsed_expr)
+                print(f"Added: {name} = {parsed_expr}")
+            else:
+                parsed_expr = parse_expression(expr_input)
+                print("Parsed expression:", parsed_expr)
+                result = interpret(parsed_expr)
+                print("Reduced result:", result)
         except Exception as e:
             print("Error:", e)
 
