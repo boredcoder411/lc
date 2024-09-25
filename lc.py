@@ -1,4 +1,5 @@
 import re
+import sys
 
 # Define the Lambda calculus data structures
 class Var:
@@ -209,5 +210,25 @@ def repl():
 
 # Example usage
 if __name__ == "__main__":
-    repl()
+    if len(sys.argv) > 1 and sys.argv[1] == "--repl":
+        repl()
+    else:
+        with open(sys.argv[1]) as f:
+            for line in f:
+                line = line.strip()
+                
+                if not line or line.startswith("#"):
+                    continue
 
+                if '=' in line:
+                    name, expr = line.split('=')
+                    name = name.strip()
+                    expr = expr.strip()
+                    parsed_expr = parse_expression(expr)
+                    add_to_context(name, parsed_expr)
+                    print(f"Added: {name} = {parsed_expr}")
+                else:
+                    parsed_expr = parse_expression(line)
+                    print("Parsed expression:", parsed_expr)
+                    result = interpret(parsed_expr)
+                    print("Reduced result:", result)
