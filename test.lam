@@ -1,0 +1,23 @@
+pair = λa.λb.λf.((f a) b)
+true = λa.λb.a
+false = λa.λb.b
+ifthenelse = λb.λt.λf.(b t f)
+first = true
+second = false
+pred = λn.λf.λx.n(λg.λh.h(g f))(λv.x)(λv.v)
+succ = λn.λf.λx.f(n(f)(x))
+sub = λm.λn.n pred m
+not = λx.x false true
+isZero = λn.n(λx.false) true
+
+zero = λf.λx.x
+one = succ zero
+two = succ one
+three = succ two
+
+sub_result = sub two one
+
+is_zero = isZero sub_result
+
+result = ifthenelse is_zero true false
+result
